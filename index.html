@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Club Chat - White Mode</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --header-color: #f8f9fa;
+            --border-color: #e9ecef;
+            --primary-color: #007bff;
+            --text-color: #212529;
+            --system-text: #6c757d;
+            --my-bubble: #007bff;
+            --other-bubble: #e9ecef;
+            --status-online: #28a745;
+            --status-offline: #dc3545;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f0f2f5;
+            color: var(--text-color);
+            height: 100vh;
+            display: flex; justify-content: center;
+        }
+
+        #app {
+            width: 100%; max-width: 500px;
+            height: 100vh; background-color: var(--bg-color);
+            display: flex; flex-direction: column;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        .join-screen {
+            flex: 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            padding: 40px 20px; text-align: center;
+        }
+
+        .join-screen h1 {
+            font-size: 2.5rem; color: var(--primary-color);
+            margin-bottom: 10px; font-weight: 800;
+        }
+
+        .connection-status {
+            font-size: 0.9rem; margin-bottom: 30px;
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+        }
+
+        .online { background-color: var(--status-online); }
+        .offline { background-color: var(--status-offline); }
+
+        .input-group {
+            width: 100%; display: flex; flex-direction: column; gap: 15px;
+        }
+
+        .input-group input {
+            padding: 18px; border: 2px solid var(--border-color);
+            border-radius: 12px; font-size: 1.1rem; outline: none;
+        }
+
+        .input-group button {
+            padding: 18px; background-color: var(--primary-color);
+            color: white; border: none; border-radius: 12px;
+            font-size: 1.2rem; font-weight: bold; cursor: pointer;
+        }
+
+        .chat-screen { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        header {
+            padding: 15px 20px; background-color: var(--header-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .user-badge {
+            background-color: #e7f3ff; color: var(--primary-color);
+            padding: 5px 15px; border-radius: 20px; font-size: 0.9rem; font-weight: 600;
+        }
+
+        .message-list {
+            flex: 1; padding: 20px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 15px;
+            background-color: white;
+        }
+
+        .message-item { display: flex; flex-direction: column; max-width: 85%; }
+        .my-message { align-self: flex-end; }
+        .other-message { align-self: flex-start; }
+        .system-message { align-self: center; max-width: 100%; margin: 5px 0; }
+
+        .system-message .msg-bubble {
+            background: transparent; color: var(--system-text);
+            font-size: 0.85rem; box-shadow: none; padding: 0;
+        }
+
+        .msg-user { font-size: 0.85rem; margin-bottom: 4px; color: #495057; font-weight: 600; }
+
+        .msg-bubble {
+            padding: 12px 16px; border-radius: 18px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+
+        .my-message .msg-bubble { background-color: var(--my-bubble); color: white; border-bottom-right-radius: 4px; }
+        .other-message .msg-bubble { background-color: var(--other-bubble); color: var(--text-color); border-bottom-left-radius: 4px; }
+
+        .msg-text { font-size: 1rem; line-height: 1.5; word-break: break-all; }
+        .msg-time { font-size: 0.7rem; margin-top: 5px; opacity: 0.7; text-align: right; }
+
+        .input-area {
+            padding: 15px 20px; background-color: var(--header-color);
+            border-top: 1px solid var(--border-color);
+            display: flex; gap: 10px; align-items: center;
+        }
+
+        .input-area input {
+            flex: 1; padding: 12px 20px; border: 1px solid var(--border-color);
+            border-radius: 30px; outline: none; font-size: 1rem;
+        }
+
+        .input-area button {
+            width: 50px; height: 50px; background-color: var(--primary-color);
+            color: white; border: none; border-radius: 50%;
+            cursor: pointer; display: flex; justify-content: center; align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 입장 화면 -->
+        <div v-if="!isJoined" class="join-screen">
+            <h1>Club Chat</h1>
+            <div class="connection-status">
+                <span :class="['status-dot', isConnected ? 'online' : 'offline']"></span>
+                <span>{{ isConnected ? '서버 연결됨' : '서버 연결 중...' }}</span>
+            </div>
+            <div class="input-group">
+                <input v-model="userName" @keyup.enter="joinChat" placeholder="사용할 이름을 입력하세요" type="text" autofocus />
+                <button @click="joinChat" :disabled="!isConnected">채팅 시작하기</button>
+            </div>
+        </div>
+
+        <!-- 채팅 화면 -->
+        <div v-else class="chat-screen">
+            <header>
+                <h2>Club Chat</h2>
+                <span class="user-badge">{{ userName }}</span>
+            </header>
+            
+            <div class="message-list" id="messageList">
+                <div v-for="(msg, index) in messages" :key="index" :class="['message-item', msg.user === userName ? 'my-message' : msg.user === 'System' ? 'system-message' : 'other-message']">
+                    <div v-if="msg.user !== 'System' && msg.user !== userName" class="msg-user">{{ msg.user }}</div>
+                    <div class="msg-bubble">
+                        <span class="msg-text">{{ msg.text }}</span>
+                        <span class="msg-time">{{ msg.time }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <input v-model="message" @keyup.enter="sendMessage" placeholder="메시지를 입력하세요..." type="text" />
+                <button @click="sendMessage">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const socket = ref(null);
+                const userName = ref('');
+                const isJoined = ref(false);
+                const isConnected = ref(false);
+                const message = ref('');
+                const messages = ref([]);
+
+                // 서버 주소 (빈 값으로 두면 현재 접속한 서버에 자동으로 연결됩니다)
+                const SERVER_URL = ''; 
+
+                onMounted(() => {
+                    socket.value = io(SERVER_URL);
+
+                    socket.value.on('connect', () => {
+                        isConnected.value = true;
+                    });
+
+                    socket.value.on('disconnect', () => {
+                        isConnected.value = false;
+                    });
+
+                    socket.value.on('receive-message', (data) => {
+                        messages.value.push(data);
+                        scrollToBottom();
+                    });
+                });
+
+                const joinChat = () => {
+                    if (userName.value.trim() && isConnected.value) {
+                        isJoined.value = true;
+                        socket.value.emit('join', userName.value);
+                    } else if (!isConnected.value) {
+                        alert('서버에 연결되지 않았습니다. 서버가 켜져 있는지 확인해주세요.');
+                    } else {
+                        alert('이름을 입력해주세요!');
+                    }
+                };
+
+                const sendMessage = () => {
+                    if (message.value.trim()) {
+                        const messageData = {
+                            user: userName.value,
+                            text: message.value,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        };
+                        socket.value.emit('send-message', messageData);
+                        message.value = '';
+                    }
+                };
+
+                const scrollToBottom = async () => {
+                    await nextTick();
+                    const list = document.getElementById('messageList');
+                    if (list) { list.scrollTop = list.scrollHeight; }
+                };
+
+                return { userName, isJoined, isConnected, message, messages, joinChat, sendMessage };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
