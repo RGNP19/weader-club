@@ -59,10 +59,13 @@ const io = new Server(server, {
 });
 
 io.on('connection', (socket) => {
-  // 새 사용자가 접속하면 저장된 메시지 내역을 먼저 보내줌
+  // 1. 연결 즉시 기록 전송 (웹용)
   socket.emit('chat-history', messageHistory);
 
   socket.on('join', (userName) => {
+    // 2. 입장 시 한 번 더 기록 전송 (앱/지연 연결용 - 중복은 클라이언트에서 제거)
+    socket.emit('chat-history', messageHistory);
+
     const welcomeMsg = {
       user: 'System',
       text: `${userName} 님이 입장하셨습니다.`,
@@ -70,7 +73,7 @@ io.on('connection', (socket) => {
     };
     messageHistory.push(welcomeMsg);
     if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
-    saveMessages(); // 파일에 저장
+    saveMessages();
     io.emit('receive-message', welcomeMsg);
   });
 
@@ -86,5 +89,4 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
-
 
