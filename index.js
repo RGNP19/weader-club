@@ -35,6 +35,8 @@ io.on('connection', (socket) => {
       text: `${userName} 님이 입장하셨습니다.`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
+    messageHistory.push(welcomeMsg);
+    if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
     io.emit('receive-message', welcomeMsg);
   });
 
@@ -51,4 +53,5 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
 
