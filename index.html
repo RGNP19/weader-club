@@ -95,13 +95,31 @@
                 const isConnected = ref(false);
                 const message = ref('');
                 const messages = ref([]);
+                const scrollToBottom = () => { nextTick(() => { const list = document.getElementById('messageList'); if (list) list.scrollTop = list.scrollHeight; }); };
                 onMounted(() => {
                     socket.value = io();
                     socket.value.on('connect', () => { isConnected.value = true; });
                     socket.value.on('disconnect', () => { isConnected.value = false; });
+                    socket.value.on('chat-history', (history) => {
+                        console.log('History received:', history.length, 'messages');
+                        
+                        // 새로운 메시지 리스트 생성 (중복 제거)
+                        const combined = [...history, ...messages.value];
+                        const seen = new Set();
+                        const unique = combined.filter(msg => {
+                            const key = `${msg.user}-${msg.text}-${msg.time}`;
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+                            return true;
+                        });
+                        
+                        // 시간순으로 정렬 (필요시)
+                        messages.value = unique;
+                        scrollToBottom();
+                    });
                     socket.value.on('receive-message', (data) => {
                         messages.value.push(data);
-                        nextTick(() => { const list = document.getElementById('messageList'); if (list) list.scrollTop = list.scrollHeight; });
+                        scrollToBottom();
                     });
                 });
                 const joinChat = () => { if (userName.value.trim() && isConnected.value) { isJoined.value = true; socket.value.emit('join', userName.value); } };
